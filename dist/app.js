@@ -106,14 +106,14 @@ function render(){
     const description=element('div','check-name',t.name);
     const taskSlots=slots(t), passed=taskSlots.filter(slot=>status(slot.id)==='ok').length;
     const recorded=taskSlots.filter(slot=>status(slot.id)).length;
-    const meta=element('div','check-meta',`${categories.find(c=>c.id===t.category).name} · ${t.frequency} ${t.frequency===1?'time':'times'} per shift · Draft timing`);
+    const meta=element('div','check-meta',categories.find(c=>c.id===t.category).name);
     if(status(t.id)||records[t.id]?.note){
       const legacy=element('div','legacy-result',`Earlier single entry: ${status(t.id)?.toUpperCase()||'Note only'}${records[t.id]?.note?' — '+records[t.id].note:''}. Kept for reference; time slots require individual results.`);
       description.append(legacy);
     }
-    description.append(meta);
+
     const summary=element('div','task-summary');
-    summary.append(element('span',passed===t.frequency?'task-complete':'task-fraction',`${passed}/${t.frequency} OK`),element('small','',`${recorded}/${t.frequency} recorded`));
+    summary.append(element('span',passed===t.frequency?'task-complete':'task-fraction',`${passed}/${t.frequency} OK`),element('small','',`${recorded}/${t.frequency} recorded`),meta);
     top.append(description,summary);
     const timeline=element('div','slot-grid');
     [occurrence].forEach(slot=>{
