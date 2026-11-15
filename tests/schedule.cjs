@@ -13,15 +13,20 @@ for(const [time,date,shift,crew] of [['2026-11-16T05:59:59','2026-11-15','night'
 assert.equal(elements['active-crew'].textContent,'1A');
 const total=evaluate('tasks.flatMap(slots).length');assert.equal(total,82);
 const findTask=()=>elements.checks.children.find(r=>r.children[0].children[0].textContent==='Reservation tray status check');
-const slot=i=>findTask().children[1].children[i];assert.equal(findTask().children[1].children.length,6);
+const slot=i=>elements.checks.children.find(row=>row.dataset.slotId===`check-5:slot-${i}`).children[1].children[0];
+assert.equal(elements.checks.children.filter(row=>row.dataset.slotId.startsWith('check-5:')).length,6);
+function assertChronological(){const offsets=elements.checks.children.filter(row=>row.dataset.offset!==undefined).map(row=>Number(row.dataset.offset));assert.deepEqual(offsets,[...offsets].sort((a,b)=>a-b));}
+assertChronological();assert.equal(elements.checks.children.length,82);
+assert.equal(elements.checks.children[0].children[1].children[0].children[0].children[0].textContent,'06:00');
 for(let i=0;i<6;i++)slot(i).children[1].children[0].click();assert.equal(elements['ok-count'].textContent,6);assert.equal(findTask().children[0].children[1].children[0].textContent,'6/6 OK');
 slot(2).children[1].children[1].click();assert.equal(elements['ok-count'].textContent,5);assert.equal(elements['ng-count'].textContent,1);
 assert.equal(evaluate("records['check-5:slot-2'].crew"),'1A');assert.equal(evaluate("records['check-5:slot-2'].shift"),'day');
-modes[2].click();assert.equal(elements.checks.children.length,1);assert.equal(elements.checks.children[0].children[1].children.length,1);
+modes[1].click();assertChronological();assert.equal(elements.checks.children.length,76);
+modes[2].click();assertChronological();assert.equal(elements.checks.children.length,1);assert.equal(elements.checks.children[0].children[1].children.length,1);
 elements.checks.children[0].children[1].children[0].children[0].children[1].click();elements.note.value='Recheck material';elements['save-note'].click();assert.equal(evaluate("records['check-5:slot-2'].note"),'Recheck material');
 context.location.hash='#summary';events.hashchange();assert.equal(elements['summary-page'].hidden,false);assert.equal(elements['checklist-page'].hidden,true);assert.equal(elements['rotation-body'].children.length,14);assert.equal(elements['summary-issues'].children.length,1);assert.equal(elements['summary-totals'].children[0].children[1].textContent,6);
 // Handover changes the recording context even without the timer firing.
-context.location.hash='';events.hashchange();modes[0].click();now='2026-11-15T18:00:00';slot(0).children[1].children[0].click();assert.equal(elements['active-crew'].textContent,'2A');assert.equal(elements['ok-count'].textContent,1);assert.equal(evaluate("records['check-5:slot-0'].shift"),'night');
+context.location.hash='';events.hashchange();modes[0].click();now='2026-11-15T18:00:00';slot(0).children[1].children[0].click();assert.equal(elements['active-crew'].textContent,'2A');assertChronological();assert.equal(elements.checks.children[0].children[1].children[0].children[0].children[0].textContent,'18:00');assert.equal(elements.checks.children.at(-1).children[1].children[0].children[0].children[0].textContent,'05:00');assert.equal(elements['ok-count'].textContent,1);assert.equal(evaluate("records['check-5:slot-0'].shift"),'night');
 now='2026-11-16T02:00:00';events.focus();assert.equal(elements['active-date'].textContent,'2026-11-15');assert.equal(elements['ok-count'].textContent,1);
 now='2026-11-16T06:00:00';events.focus();assert.equal(elements['active-crew'].textContent,'1B');assert.equal(elements['ok-count'].textContent,0);assert.equal(evaluate('slots(tasks[0])[0].label'),'06:00');
 // Persisted day and night entries remain distinct and summary totals include both.
@@ -29,4 +34,4 @@ elements['summary-date'].value='2026-11-15';evaluate('renderSummary()');assert.e
 // An open note cannot cross a shift boundary.
 slot(0).children[0].children[1].click();elements.note.value='Do not transfer';now='2026-11-16T18:00:00';elements['save-note'].click();assert.equal(evaluate('active.crew'),'2B');assert.equal(evaluate('Object.keys(records).length'),0);
 elements.export.click();
-(async()=>{const csv=await exported.text();assert.equal(csv.split('\r\n').length,total+1);assert.ok(csv.includes('"2B","2026-11-16","night"'));assert.ok(!csv.includes('priority'));console.log('PASS: full Pitman cycle, 06:00/18:00 boundaries, overnight date, automatic recording metadata, recurring results, occurrence notes, summary totals/NG/rotation, handover isolation, CSV.');})();
+(async()=>{const csv=await exported.text();assert.equal(csv.split('\r\n').length,total+1);assert.ok(csv.includes('"2B","2026-11-16","night"'));assert.ok(!csv.includes('priority'));const times=csv.split('\r\n').slice(1).map(row=>row.split(',')[5]);assert.equal(times[0],'"18:00"');assert.equal(times.at(-1),'"05:00"');console.log('PASS: full Pitman cycle, 06:00/18:00 boundaries, overnight date, automatic recording metadata, recurring results, occurrence notes, summary totals/NG/rotation, handover isolation, chronological day/night/filter order, sorted CSV.');})();
