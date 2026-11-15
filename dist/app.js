@@ -45,9 +45,13 @@ function slots(task){
     return {id:`${task.id}:slot-${index}`,label:`${String(hour).padStart(2,'0')}:00`,offset};
   });
 }
-function matchesMode(slot){return mode==='all'||(mode==='pending'?!status(slot.id):status(slot.id)==='ng');}
+function matchesMode(slot){return (!hideOK||status(slot.id)!=='ok')&&(mode==='all'||(mode==='pending'?!status(slot.id):status(slot.id)==='ng'));}
 const $ = id=>document.getElementById(id);
 let category='all', mode='all', records={}, editingTask=null, storageAvailable=true;
+let hideOK=true;
+try{hideOK=localStorage.getItem('lh-hide-ok')!=='false';}catch{}
+$('hide-ok').checked=hideOK;
+$('hide-ok').addEventListener('change',()=>{hideOK=$('hide-ok').checked;try{localStorage.setItem('lh-hide-ok',String(hideOK));}catch{}render();});
 let active=shiftAt();
 function storageKey(){return shiftKey(active);}
 function readRecords(context){try{const data=JSON.parse(localStorage.getItem(shiftKey(context))||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?data:{};}catch{return {};}}
@@ -98,7 +102,7 @@ function render(){
   const query=$('search').value.trim().toLowerCase();
   const shown=tasks.filter(t=>(category==='all'||t.category===category)&&slots(t).some(matchesMode)&&t.name.toLowerCase().includes(query));
   $('checks').replaceChildren();
-  if(!shown.length)$('checks').append(element('div','empty','No checks match this view. Try another filter.'));
+  if(!shown.length)$('checks').append(element('div','empty',hideOK?'No open checks in this view. Turn off “Hide OK checks” to see completed results.':'No checks match this view. Try another filter.'));
   shown.forEach(t=>{
     const row=element('article','scheduled-task');
     const top=element('div','task-heading');

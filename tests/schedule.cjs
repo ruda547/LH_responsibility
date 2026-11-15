@@ -11,11 +11,18 @@ const expected=['1A','1B','1B','1A','1A','1B','1B','1B','1A','1A','1B','1B','1A'
 for(let i=0;i<expected.length;i++){const date=evaluate(`calendarOffset('2026-11-15',${i})`);assert.equal(evaluate(`crewFor('${date}','day')`),expected[i]);assert.equal(evaluate(`crewFor('${date}','night')`),expected[i].replace('1','2'));}
 for(const [time,date,shift,crew] of [['2026-11-16T05:59:59','2026-11-15','night','2A'],['2026-11-16T06:00:00','2026-11-16','day','1B'],['2026-11-16T17:59:59','2026-11-16','day','1B'],['2026-11-16T18:00:00','2026-11-16','night','2B']]){const result=evaluate(`shiftAt(new Date('${time}'))`);assert.equal(result.date,date);assert.equal(result.shift,shift);assert.equal(result.crew,crew);}
 assert.equal(elements['active-crew'].textContent,'1A');
+assert.equal(elements['hide-ok'].checked,true);
+elements['hide-ok'].checked=false;elements['hide-ok'].listeners.change();
 const total=evaluate('tasks.flatMap(slots).length');assert.equal(total,82);
 const findTask=()=>elements.checks.children.find(r=>r.children[0].children[0].textContent==='Reservation tray status check');
 const slot=i=>findTask().children[1].children[i];assert.equal(findTask().children[1].children.length,6);
 for(let i=0;i<6;i++)slot(i).children[1].children[0].click();assert.equal(elements['ok-count'].textContent,6);assert.equal(findTask().children[0].children[1].children[0].textContent,'6/6 OK');
 slot(2).children[1].children[1].click();assert.equal(elements['ok-count'].textContent,5);assert.equal(elements['ng-count'].textContent,1);
+// Hiding OK checks removes their time boxes without removing NG or stored results.
+elements['hide-ok'].checked=true;elements['hide-ok'].listeners.change();assert.equal(findTask().children[1].children.length,1);assert.equal(elements['ok-count'].textContent,5);
+slot(0).children[1].children[0].click();assert.equal(elements['ok-count'].textContent,6);assert.equal(elements.checks.children.some(r=>r.children[0].children[0].textContent==='Reservation tray status check'&&r.children[0].children[0].children.some(c=>c.textContent?.includes('Material'))),false);
+assert.equal(evaluate("slots(tasks[4]).some(matchesMode)"),false);
+elements['hide-ok'].checked=false;elements['hide-ok'].listeners.change();assert.equal(findTask().children[1].children.length,6);slot(2).children[1].children[1].click();assert.equal(elements['ng-count'].textContent,1);
 assert.equal(evaluate("records['check-5:slot-2'].crew"),'1A');assert.equal(evaluate("records['check-5:slot-2'].shift"),'day');
 modes[2].click();assert.equal(elements.checks.children.length,1);assert.equal(elements.checks.children[0].children[1].children.length,1);
 elements.checks.children[0].children[1].children[0].children[0].children[1].click();elements.note.value='Recheck material';elements['save-note'].click();assert.equal(evaluate("records['check-5:slot-2'].note"),'Recheck material');
