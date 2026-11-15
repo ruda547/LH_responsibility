@@ -1,0 +1,31 @@
+const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/strict');
+class El{constructor(tag='div'){this.tag=tag;this.children=[];this.value='';this.dataset={};this.style={};this.listeners={};this.classList={toggle(){}};this.selectedOptions=[{text:'Demo'}];}append(...a){this.children.push(...a)}replaceChildren(...a){this.children=a}setAttribute(){}addEventListener(n,f){this.listeners[n]=f}showModal(){this.open=true}close(){this.open=false}reportValidity(){}click(){this.listeners.click?.()}}
+const elements={},modes=['all','pending','ng'].map(m=>{const e=new El('button');e.dataset.mode=m;return e});
+const document={getElementById(id){return elements[id]??=new El()},createElement:t=>new El(t),createTextNode:t=>String(t),querySelectorAll:()=>modes};
+let exported;
+const data=new Map(),context={document,console,Date,Blob,URL:{createObjectURL:b=>{exported=b;return 'blob:demo'},revokeObjectURL(){}},setTimeout:f=>f(),localStorage:{getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)}};
+vm.createContext(context);document.getElementById('supervisor').value='a';document.getElementById('shift').value='day';
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../dist/app.js'),'utf8'),context);
+const evaluate=s=>vm.runInContext(s,context),findTask=id=>elements.checks.children.find(r=>r.children[0].children[0].textContent===id);
+const total=evaluate('tasks.flatMap(slots).length');assert.ok(total>27);
+assert.equal(elements['pending-count'].textContent,total);
+// Six reservation tray occurrences each need a separate result.
+const taskName='Reservation tray status check';
+const slot=(i)=>findTask(taskName).children[1].children[i];
+assert.equal(findTask(taskName).children[1].children.length,6);
+slot(0).children[1].children[0].click();assert.equal(elements['ok-count'].textContent,1);assert.equal(elements['pending-count'].textContent,total-1);
+assert.equal(evaluate("status('check-5:slot-1')"),null);
+for(let i=1;i<6;i++)slot(i).children[1].children[0].click();
+assert.equal(elements['ok-count'].textContent,6);
+assert.equal(findTask(taskName).children[0].children[1].children[1].textContent,'6/6 OK');
+slot(2).children[1].children[1].click();assert.equal(elements['ok-count'].textContent,5);assert.equal(elements['ng-count'].textContent,1);
+assert.equal(findTask(taskName).children[0].children[1].children[1].textContent,'5/6 OK');
+modes[2].click();assert.equal(elements.checks.children.length,1);assert.equal(elements.checks.children[0].children[1].children.length,1);
+elements.checks.children[0].children[1].children[0].children[0].children[1].click();elements.note.value='Recheck material';elements['save-note'].click();assert.equal(evaluate("records['check-5:slot-2'].note"),'Recheck material');assert.equal(evaluate("records['check-5:slot-1'].note"),undefined);
+modes[0].click();elements.supervisor.value='b';elements.supervisor.listeners.change();assert.equal(elements['ok-count'].textContent,0);
+elements.supervisor.value='a';elements.supervisor.listeners.change();assert.equal(elements['ok-count'].textContent,5);
+const day=elements.date.value;elements.date.value='2026-11-16';elements.date.listeners.change();assert.equal(elements['ok-count'].textContent,0);elements.date.value=day;elements.date.listeners.change();assert.equal(elements['ok-count'].textContent,5);
+elements.shift.value='night';elements.shift.listeners.change();assert.equal(elements['ok-count'].textContent,0);assert.equal(evaluate('slots(tasks[0])[0].label'),'17:30');assert.equal(evaluate('slots(tasks[14])[11].label'),'04:30');
+elements.shift.value='day';elements.shift.listeners.change();assert.equal(elements['ok-count'].textContent,5);
+elements.export.click();
+(async()=>{const csv=await exported.text();assert.equal(csv.split('\r\n').length,total+1);assert.ok(csv.includes('Scheduled time (draft)'));assert.ok(csv.includes('Recheck material'));console.log(`PASS: ${total} independent scheduled slots, task completion, OK/NG replacement, occurrence notes/filtering, supervisor/date/shift isolation, overnight labels, persistence, CSV rows.`)})();
