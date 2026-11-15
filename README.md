@@ -13,7 +13,7 @@ Sunday 15 November 2026 is anchored as the final A day. The next days are B/B, A
 
 The device's local timezone controls recording. Day is 06:00 inclusive to 18:00 exclusive; night is 18:00 to 06:00. Before 06:00, the shift date is the previous calendar date. Crew, shift, shift start date, and recording timestamp are saved automatically. The page checks for handover every 30 seconds, on focus, and before recording. Notes opened before handover cannot be saved into the next shift.
 
-There are no supervisor or shift selectors and no task priority labels. Each scheduled occurrence requires its own result. “Hide OK checks” is enabled by default: OK time boxes leave the list, and a task disappears when all its occurrences are OK. Toggle it off to review or change saved results; NG and pending checks remain visible. This preference is saved in the browser. NG counts as recorded but does not count toward a task's OK total.
+There are no supervisor or shift selectors and no task priority labels. Each scheduled occurrence requires its own result. “Hide OK checks” is enabled by default: OK time boxes leave the list, and a task disappears when all its occurrences are OK. Tasks are sorted by their earliest visible time box and reorder automatically as OK boxes disappear, using elapsed shift time across midnight. Toggle it off to review or change saved results; NG and pending checks remain visible. This preference is saved in the browser. NG counts as recorded but does not count toward a task's OK total.
 
 ## Preview and verification
 

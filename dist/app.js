@@ -45,6 +45,7 @@ function slots(task){
     return {id:`${task.id}:slot-${index}`,label:`${String(hour).padStart(2,'0')}:00`,offset};
   });
 }
+function nextVisibleOffset(task){return Math.min(...slots(task).filter(matchesMode).map(slot=>slot.offset));}
 function matchesMode(slot){return (!hideOK||status(slot.id)!=='ok')&&(mode==='all'||(mode==='pending'?!status(slot.id):status(slot.id)==='ng'));}
 const $ = id=>document.getElementById(id);
 let category='all', mode='all', records={}, editingTask=null, storageAvailable=true;
@@ -100,11 +101,11 @@ function render(){
   $('category-title').textContent=cat.name;
   $('category-subtitle').textContent=category==='all'?'Every control point across your shift':'Control points drafted from your daily check sheet';
   const query=$('search').value.trim().toLowerCase();
-  const shown=tasks.filter(t=>(category==='all'||t.category===category)&&slots(t).some(matchesMode)&&t.name.toLowerCase().includes(query));
+  const shown=tasks.filter(t=>(category==='all'||t.category===category)&&slots(t).some(matchesMode)&&t.name.toLowerCase().includes(query)).sort((a,b)=>nextVisibleOffset(a)-nextVisibleOffset(b));
   $('checks').replaceChildren();
   if(!shown.length)$('checks').append(element('div','empty',hideOK?'No open checks in this view. Turn off “Hide OK checks” to see completed results.':'No checks match this view. Try another filter.'));
   shown.forEach(t=>{
-    const row=element('article','scheduled-task');
+    const row=element('article','scheduled-task');row.dataset.taskId=t.id;
     const top=element('div','task-heading');
     const description=element('div','check-name',t.name);
     const taskSlots=slots(t), passed=taskSlots.filter(slot=>status(slot.id)==='ok').length;
