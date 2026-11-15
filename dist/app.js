@@ -41,17 +41,23 @@ const tasks = taskData.map(([category,priority,name],i)=>({id:`check-${i+1}`,cat
 function slots(task){
   return Array.from({length:task.frequency},(_,index)=>{
     const offset=Math.floor(index*12/task.frequency);
-    const hour=(($('shift').value==='night'?17:5)+offset)%24;
-    return {id:`${task.id}:slot-${index}`,label:`${String(hour).padStart(2,'0')}:30`,offset};
+    const hour=((active.shift==='night'?18:6)+offset)%24;
+    return {id:`${task.id}:slot-${index}`,label:`${String(hour).padStart(2,'0')}:00`,offset};
   });
 }
 function matchesMode(slot){return mode==='all'||(mode==='pending'?!status(slot.id):status(slot.id)==='ng');}
 const $ = id=>document.getElementById(id);
 let category='all', mode='all', records={}, editingTask=null, storageAvailable=true;
-const today = new Date();
-$('date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-function storageKey(){return `lh-prototype-v1:${$('supervisor').value}:${$('date').value}:${$('shift').value}`;}
-function validDate(){return /^\d{4}-\d{2}-\d{2}$/.test($('date').value);}
+let active=shiftAt();
+function storageKey(){return shiftKey(active);}
+function readRecords(context){try{const data=JSON.parse(localStorage.getItem(shiftKey(context))||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?data:{};}catch{return {};}}
+function refreshShift(){
+ const current=shiftAt();
+ if(shiftKey(current)!==shiftKey(active)){
+  active=current; editingTask=null; $('note-dialog').close();load();return true;
+ }
+ return false;
+}
 function load(){
   try {const saved=JSON.parse(localStorage.getItem(storageKey())||'{}');records=saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{};storageAvailable=true;}
   catch{records={};storageAvailable=false;}
@@ -65,6 +71,10 @@ function save(){
 function status(id){const value=records[id]?.status;return value==='ok'||value==='ng'?value:null;}
 function element(tag,className,text){const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
 function render(){
+  $('active-crew').textContent=active.crew;
+  $('active-shift').textContent=active.shift==='day'?'Day · 06:00–18:00':'Night · 18:00–06:00';
+  $('active-date').textContent=active.date;
+  $('clock-note').textContent=`Automatic crew and shift · Device timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone} · Overnight checks stay with the night shift’s start date.`;
   const scheduled=tasks.flatMap(slots);
   const ok=scheduled.filter(slot=>status(slot.id)==='ok').length;
   const ng=scheduled.filter(slot=>status(slot.id)==='ng').length;
@@ -102,7 +112,7 @@ function render(){
     }
     description.append(meta);
     const summary=element('div','task-summary');
-    summary.append(element('span',`priority p${t.priority}`,`P${t.priority}`),element('span',passed===t.frequency?'task-complete':'task-fraction',`${passed}/${t.frequency} OK`),element('small','',`${recorded}/${t.frequency} recorded`));
+    summary.append(element('span',passed===t.frequency?'task-complete':'task-fraction',`${passed}/${t.frequency} OK`),element('small','',`${recorded}/${t.frequency} recorded`));
     top.append(description,summary);
     const timeline=element('div','slot-grid');
     taskSlots.filter(matchesMode).forEach(slot=>{
@@ -111,13 +121,13 @@ function render(){
       slotTop.append(element('strong','',slot.label));
       const note=element('button',`note-button ${records[slot.id]?.note?'has-note':''}`,records[slot.id]?.note?'▣':'▢');
       note.type='button';note.title=records[slot.id]?.note?'Edit note':'Add note';note.setAttribute('aria-label',`Notes for ${t.name} at ${slot.label}`);
-      note.addEventListener('click',()=>{editingTask=slot.id;$('note-title').textContent=`${t.name} · ${slot.label}`;$('note').value=typeof records[slot.id]?.note==='string'?records[slot.id].note:'';$('note-dialog').showModal();});
+      note.addEventListener('click',()=>{refreshShift();editingTask=slot.id;$('note-title').textContent=`${t.name} · ${slot.label}`;$('note').value=typeof records[slot.id]?.note==='string'?records[slot.id].note:'';$('note-dialog').showModal();});
       slotTop.append(note);
       const results=element('div','status-buttons');
       ['ok','ng'].forEach(result=>{
         const button=element('button',`${result} ${status(slot.id)===result?'on':''}`,result.toUpperCase());
         button.type='button';button.setAttribute('aria-label',`${t.name} at ${slot.label}: ${result.toUpperCase()}`);button.setAttribute('aria-pressed',String(status(slot.id)===result));
-        button.addEventListener('click',()=>{if(!validDate()){$('date').reportValidity();return;}records[slot.id]={...records[slot.id],status:status(slot.id)===result?null:result,updatedAt:new Date().toISOString()};save();});
+        button.addEventListener('click',()=>{refreshShift();records[slot.id]={...records[slot.id],status:status(slot.id)===result?null:result,updatedAt:new Date().toISOString(),crew:active.crew,shift:active.shift,shiftDate:active.date};save();});
         results.append(button);
       });
       box.append(slotTop,results,element('small','slot-state',status(slot.id)==='ok'?'✓ Passed':status(slot.id)==='ng'?'! Needs attention':'Awaiting check'));
@@ -126,15 +136,61 @@ function render(){
     row.append(top,timeline);$('checks').append(row);
   });
 }
-for(const id of ['supervisor','date','shift'])$(id).addEventListener('change',()=>{if(!validDate()){$('date').reportValidity();return;}load();});
+
 $('search').addEventListener('input',render);
 document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{mode=button.dataset.mode;render();}));
-$('save-note').addEventListener('click',()=>{if(!editingTask)return;records[editingTask]={...records[editingTask],note:$('note').value,updatedAt:new Date().toISOString()};save();$('note-dialog').close();});
+$('save-note').addEventListener('click',()=>{if(refreshShift()||!editingTask)return;records[editingTask]={...records[editingTask],note:$('note').value,updatedAt:new Date().toISOString(),crew:active.crew,shift:active.shift,shiftDate:active.date};save();$('note-dialog').close();});
 $('export').addEventListener('click',()=>{
+  refreshShift();
   // Neutralize spreadsheet formulas in free-text fields before CSV export.
   const quote=value=>{let s=String(value??'');if(/^[\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
-  const rows=[['Supervisor','Date','Shift','Category','Control point','Draft priority','Scheduled time (draft)','Result','Note','Updated at'],...tasks.flatMap(t=>slots(t).map(slot=>[$('supervisor').selectedOptions[0].text,$('date').value,$('shift').selectedOptions[0].text,categories.find(c=>c.id===t.category).name,t.name,t.priority,slot.label,status(slot.id)?.toUpperCase()||'Pending',records[slot.id]?.note||'',records[slot.id]?.updatedAt||'']))];
+  const rows=[['Crew','Shift start date','Shift','Category','Control point','Scheduled time (draft)','Result','Note','Updated at'],...tasks.flatMap(t=>slots(t).map(slot=>[active.crew,active.date,active.shift,categories.find(c=>c.id===t.category).name,t.name,slot.label,status(slot.id)?.toUpperCase()||'Pending',records[slot.id]?.note||'',records[slot.id]?.updatedAt||'']))];
   const blob=new Blob(['\ufeff'+rows.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`LH-checklist-${$('supervisor').value}-${$('date').value}-${$('shift').value}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`LH-checklist-${active.crew}-${active.date}-${active.shift}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
-load();
+
+function shiftStats(date,shift){
+ const crew=crewFor(date,shift), data=readRecords({date,shift,crew}), ids=tasks.flatMap(t=>Array.from({length:t.frequency},(_,i)=>`${t.id}:slot-${i}`));
+ const ok=ids.filter(id=>data[id]?.status==='ok').length,ng=ids.filter(id=>data[id]?.status==='ng').length;
+ const start=new Date(date+'T'+(shift==='day'?'06':'18')+':00:00'),end=new Date(start);end.setHours(end.getHours()+12);
+ const now=new Date(), state=now<start?'Upcoming':now>=end?'Finished':'In progress';
+ return {crew,data,ok,ng,total:ids.length,recorded:ok+ng,state};
+}
+function renderSummary(){
+ const date=$('summary-date').value;if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return;
+ const day=shiftStats(date,'day'),night=shiftStats(date,'night'),both=[day,night];
+ $('summary-totals').replaceChildren();
+ [['Recorded checks',both.reduce((n,s)=>n+s.recorded,0)],['Checks passed',day.ok+night.ok],['Needs attention',day.ng+night.ng],['Scheduled checks',day.total+night.total]].forEach(([label,value])=>{const card=element('article');card.append(element('div','stat-label',label),element('div','stat-value',value));$('summary-totals').append(card);});
+ $('shift-summaries').replaceChildren();$('summary-issues').replaceChildren();
+ ['day','night'].forEach((shift,index)=>{
+  const stats=both[index],card=element('article','shift-summary');
+  card.append(element('div','eyebrow',`${shift.toUpperCase()} SHIFT · ${stats.state}`),element('h2','',`Crew ${stats.crew}`),element('p','',shift==='day'?'06:00–18:00':'18:00–06:00 next day'),element('strong','',`${stats.recorded} / ${stats.total} checks recorded`),element('p','',`${stats.ok} OK · ${stats.ng} NG · ${stats.total-stats.recorded} ${stats.state==='Upcoming'?'scheduled':'remaining'}`));
+  $('shift-summaries').append(card);
+  tasks.forEach(t=>Array.from({length:t.frequency},(_,i)=>{
+   const r=stats.data[`${t.id}:slot-${i}`];if(r?.status!=='ng')return;
+   const time=String(((shift==='day'?6:18)+Math.floor(i*12/t.frequency))%24).padStart(2,'0')+':00';
+   const item=element('div','summary-issue');item.append(element('strong','',`${stats.crew} · ${time} · ${t.name}`),element('p','',r.note||'No follow-up note recorded.'));$('summary-issues').append(item);
+  }));
+ });
+ if(!$('summary-issues').children.length)$('summary-issues').append(element('div','empty','No NG results recorded for this shift date.'));
+ $('rotation-body').replaceChildren();
+ for(let i=0;i<14;i++){
+  const d=calendarOffset(date,i),a=shiftStats(d,'day'),b=shiftStats(d,'night'),row=element('tr');
+  const cell=element('td'),button=element('button','date-link',d);button.type='button';button.addEventListener('click',()=>{$('summary-date').value=d;renderSummary();});cell.append(button);row.append(cell);
+  [a.crew,b.crew,`${a.recorded+b.recorded} / ${a.total+b.total}`,a.ok+b.ok,a.ng+b.ng].forEach(value=>row.append(element('td','',value)));$('rotation-body').append(row);
+ }
+}
+function showWorkspace(){
+ const summary=location.hash==='#summary';
+ $('checklist-page').hidden=summary;$('summary-page').hidden=!summary;
+ $('nav-checklist').classList.toggle('active',!summary);$('nav-summary').classList.toggle('active',summary);
+ $('nav-checklist').setAttribute('aria-current',summary?'false':'page');$('nav-summary').setAttribute('aria-current',summary?'page':'false');
+ $('page-name').textContent=summary?'Summary':'Daily checklist';if(summary)renderSummary();
+}
+$('summary-date').value=active.date;
+$('summary-date').addEventListener('change',renderSummary);
+window.addEventListener('hashchange',showWorkspace);
+window.addEventListener('focus',()=>{refreshShift();showWorkspace();});
+window.addEventListener('storage',()=>{load();showWorkspace();});
+setInterval(()=>{refreshShift();if(location.hash==='#summary')renderSummary();},30000);
+load();showWorkspace();
