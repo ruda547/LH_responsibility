@@ -4,7 +4,7 @@ Visual prototype of a supervisor daily checklist based on the supplied check she
 
 ## Workspaces
 
-- Daily checklist: automatic Pitman crew and shift, recurring OK/NG checks in chronological order (earliest first), notes, progress, search, filters, and time-ordered CSV export. Each occurrence has its own row; overnight order follows elapsed shift time across midnight.
+- Daily checklist: automatic Pitman crew and shift, tasks grouped with a separate box for each scheduled time, independent OK/NG results, notes, progress, search, filters, and CSV export.
 - Summary: selected-date day/night totals, NG items and notes, and a 14-day crew overview.
 
 ## Pitman rotation and recording

@@ -45,7 +45,6 @@ function slots(task){
     return {id:`${task.id}:slot-${index}`,label:`${String(hour).padStart(2,'0')}:00`,offset};
   });
 }
-function scheduledEntries(){return tasks.flatMap(t=>slots(t).map(slot=>({task:t,slot}))).sort((a,b)=>a.slot.offset-b.slot.offset);}
 function matchesMode(slot){return mode==='all'||(mode==='pending'?!status(slot.id):status(slot.id)==='ng');}
 const $ = id=>document.getElementById(id);
 let category='all', mode='all', records={}, editingTask=null, storageAvailable=true;
@@ -95,28 +94,28 @@ function render(){
   document.querySelectorAll('[data-mode]').forEach(button=>{button.classList.toggle('selected',button.dataset.mode===mode);button.setAttribute('aria-pressed',String(button.dataset.mode===mode));});
   const cat=categories.find(c=>c.id===category);
   $('category-title').textContent=cat.name;
-  $('category-subtitle').textContent=category==='all'?'Scheduled checks · earliest first':'Category checks · earliest first';
+  $('category-subtitle').textContent=category==='all'?'Every control point across your shift':'Control points drafted from your daily check sheet';
   const query=$('search').value.trim().toLowerCase();
-  const shown=scheduledEntries().filter(({task:t,slot})=>(category==='all'||t.category===category)&&matchesMode(slot)&&t.name.toLowerCase().includes(query));
+  const shown=tasks.filter(t=>(category==='all'||t.category===category)&&slots(t).some(matchesMode)&&t.name.toLowerCase().includes(query));
   $('checks').replaceChildren();
   if(!shown.length)$('checks').append(element('div','empty','No checks match this view. Try another filter.'));
-  shown.forEach(({task:t,slot:occurrence})=>{
-    const row=element('article','scheduled-task chronological-task');row.dataset.slotId=occurrence.id;row.dataset.offset=String(occurrence.offset);
+  shown.forEach(t=>{
+    const row=element('article','scheduled-task');
     const top=element('div','task-heading');
     const description=element('div','check-name',t.name);
     const taskSlots=slots(t), passed=taskSlots.filter(slot=>status(slot.id)==='ok').length;
     const recorded=taskSlots.filter(slot=>status(slot.id)).length;
-    const meta=element('div','check-meta',categories.find(c=>c.id===t.category).name);
+    const meta=element('div','check-meta',`${categories.find(c=>c.id===t.category).name} · ${t.frequency} ${t.frequency===1?'time':'times'} per shift · Draft timing`);
     if(status(t.id)||records[t.id]?.note){
       const legacy=element('div','legacy-result',`Earlier single entry: ${status(t.id)?.toUpperCase()||'Note only'}${records[t.id]?.note?' — '+records[t.id].note:''}. Kept for reference; time slots require individual results.`);
       description.append(legacy);
     }
-
+    description.append(meta);
     const summary=element('div','task-summary');
-    summary.append(element('span',passed===t.frequency?'task-complete':'task-fraction',`${passed}/${t.frequency} OK`),element('small','',`${recorded}/${t.frequency} recorded`),meta);
+    summary.append(element('span',passed===t.frequency?'task-complete':'task-fraction',`${passed}/${t.frequency} OK`),element('small','',`${recorded}/${t.frequency} recorded`));
     top.append(description,summary);
     const timeline=element('div','slot-grid');
-    [occurrence].forEach(slot=>{
+    taskSlots.filter(matchesMode).forEach(slot=>{
       const box=element('div',`time-slot ${status(slot.id)||'pending'}`);
       const slotTop=element('div','slot-heading');
       slotTop.append(element('strong','',slot.label));
@@ -145,7 +144,7 @@ $('export').addEventListener('click',()=>{
   refreshShift();
   // Neutralize spreadsheet formulas in free-text fields before CSV export.
   const quote=value=>{let s=String(value??'');if(/^[\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
-  const rows=[['Crew','Shift start date','Shift','Category','Control point','Scheduled time (draft)','Result','Note','Updated at'],...scheduledEntries().map(({task:t,slot})=>[active.crew,active.date,active.shift,categories.find(c=>c.id===t.category).name,t.name,slot.label,status(slot.id)?.toUpperCase()||'Pending',records[slot.id]?.note||'',records[slot.id]?.updatedAt||''])];
+  const rows=[['Crew','Shift start date','Shift','Category','Control point','Scheduled time (draft)','Result','Note','Updated at'],...tasks.flatMap(t=>slots(t).map(slot=>[active.crew,active.date,active.shift,categories.find(c=>c.id===t.category).name,t.name,slot.label,status(slot.id)?.toUpperCase()||'Pending',records[slot.id]?.note||'',records[slot.id]?.updatedAt||'']))];
   const blob=new Blob(['\ufeff'+rows.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`LH-checklist-${active.crew}-${active.date}-${active.shift}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
